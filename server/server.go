@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"time"
 
+	"cloud.google.com/go/pubsub"
 	fluxevent "github.com/fluxcd/flux/pkg/event"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -20,6 +21,8 @@ import (
 var (
 	command       = kingpin.Command("server", "Start http server")
 	listenAddress = command.Flag("listen-address", "HTTP address").Default(":8080").String()
+	googleProject = command.Flag("google-project", "Google project").Required().String()
+	pubsubTopic   = command.Flag("pubsub-topic", "Google pubsub topic").Required().String()
 
 	upgrader = websocket.Upgrader{}
 )
@@ -119,8 +122,24 @@ func (s *Server) fluxEventV6Handler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	//TODO: Publish to a pubsub topic
+	ctx := context.Background()
+	client, err := pubsub.NewClient(ctx, *googleProject)
+	if err != nil {
+		log.WithField("path", path).Errorf("pubsub.NewClient: %v", err)
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	t := client.Topic(*pubsubTopic)
+	result := t.Publish(ctx, &pubsub.Message{Data: eventStr})
+	id, err := result.Get(ctx)
+	if err != nil {
+		log.WithField("path", path).Errorf("Get: %v", err)
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	log.WithField("path", path).Infof("Published a event; msg ID: %v\n", id)
+
 	w.WriteHeader(200)
 	return
-
 }
