@@ -36,17 +36,18 @@ type Server struct {
 	pubsubClient  *pubsub.Client
 }
 
-func NewServer() *Server {
+func NewServer() (*Server, error) {
 	ctx := context.Background()
 	c, err := pubsub.NewClient(ctx, *googleProject)
 	if err != nil {
 		log.Errorf("pubsub.NewClient: %v", err)
+		return nil, err
 	}
 
 	return &Server{
 		pubsubContext: ctx,
 		pubsubClient:  c,
-	}
+	}, nil
 }
 
 func (s *Server) Run() {

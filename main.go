@@ -42,7 +42,10 @@ func main() {
 
 	switch kingpin.Parse() {
 	case server.FullCommand():
-		s := server.NewServer()
+		s, err := server.NewServer()
+		if err != nil {
+			log.Fatal(err)
+		}
 		s.Run()
 	}
 	if err != nil {
