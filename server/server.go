@@ -1,12 +1,16 @@
 package server
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
 
+	fluxevent "github.com/fluxcd/flux/pkg/event"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
@@ -33,7 +37,7 @@ func NewServer() *Server {
 func (s *Server) Run() {
 	r := mux.NewRouter()
 	r.HandleFunc("/", s.websocketHandler)
-	r.HandleFunc("/v6/events", s.fluxEventV6Handler)
+	r.HandleFunc("/v6/events", s.fluxEventV6Handler).Methods("POST")
 
 	srv := &http.Server{
 		Addr:         *listenAddress,
@@ -82,15 +86,14 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 	for {
 		mt, message, err := c.ReadMessage()
 		if err != nil {
-			log.Infof("read:", err)
+			log.Errorf("read:", err)
 			break
 		}
-
 		log.Infof("recv: %s", message)
-		err = c.WriteMessage(mt, message)
 
+		err = c.WriteMessage(mt, message)
 		if err != nil {
-			log.Infof("write:", err)
+			log.Errorf("write:", err)
 			break
 		}
 	}
@@ -98,6 +101,26 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 }
 
 func (s *Server) fluxEventV6Handler(w http.ResponseWriter, req *http.Request) {
-	log.Debug("Event handler")
-	//TODO: Parse flux events and publish to a pubsub topic
+	path := req.URL.Path
+	event := fluxevent.Event{}
+
+	eventStr, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Error(err)
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	log.WithField("path", path).Debugf("Retrieved event: %s", eventStr)
+
+	err = json.NewDecoder(bytes.NewBuffer(eventStr)).Decode(&event)
+	if err != nil {
+		log.Error(err)
+		http.Error(w, err.Error(), 400)
+		return
+	}
+
+	//TODO: publish to a pubsub topic
+	w.WriteHeader(200)
+	return
+
 }
