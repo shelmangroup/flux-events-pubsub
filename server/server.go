@@ -70,30 +70,30 @@ func (s *Server) Run() {
 }
 
 func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
-	log.Debug("Websocket handler")
+	path := req.URL.Path
 	c, err := upgrader.Upgrade(w, req, nil)
 	if err != nil {
-		log.Warnf("Upgrade: ", err)
+		log.WithField("path", path).Errorf("Upgrade: %s", err)
 		return
 	}
 
 	defer func() {
-		log.Infof("client disconnected")
+		log.WithField("path", path).Infof("client disconnected")
 		c.Close()
 	}()
 
-	log.Info("client connected")
+	log.WithField("path", path).Infof("client connected")
 	for {
 		mt, message, err := c.ReadMessage()
 		if err != nil {
-			log.Errorf("read:", err)
+			log.WithField("path", path).Errorf("read: %s", err)
 			break
 		}
-		log.Infof("recv: %s", message)
+		log.WithField("path", path).Infof("recv: %s", message)
 
 		err = c.WriteMessage(mt, message)
 		if err != nil {
-			log.Errorf("write:", err)
+			log.WithField("path", path).Errorf("write: %s", err)
 			break
 		}
 	}
@@ -106,7 +106,7 @@ func (s *Server) fluxEventV6Handler(w http.ResponseWriter, req *http.Request) {
 
 	eventStr, err := ioutil.ReadAll(req.Body)
 	if err != nil {
-		log.Error(err)
+		log.WithField("path", path).Error(err)
 		http.Error(w, err.Error(), 400)
 		return
 	}
@@ -114,12 +114,12 @@ func (s *Server) fluxEventV6Handler(w http.ResponseWriter, req *http.Request) {
 
 	err = json.NewDecoder(bytes.NewBuffer(eventStr)).Decode(&event)
 	if err != nil {
-		log.Error(err)
+		log.WithField("path", path).Error(err)
 		http.Error(w, err.Error(), 400)
 		return
 	}
 
-	//TODO: publish to a pubsub topic
+	//TODO: Publish to a pubsub topic
 	w.WriteHeader(200)
 	return
 
