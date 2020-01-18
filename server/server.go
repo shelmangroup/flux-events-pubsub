@@ -22,7 +22,7 @@ var (
 	command       = kingpin.Command("server", "Start http server")
 	listenAddress = command.Flag("listen-address", "HTTP address").Default(":8080").String()
 	googleProject = command.Flag("google-project", "Google project").Required().String()
-	pubsubTopic   = command.Flag("pubsub-topic", "Google pubsub topic").Required().String()
+	pubsubTopic   = command.Flag("google-pubsub-topic", "Google pubsub topic").Required().String()
 
 	upgrader = websocket.Upgrader{}
 )
@@ -31,10 +31,22 @@ func FullCommand() string {
 	return command.FullCommand()
 }
 
-type Server struct{}
+type Server struct {
+	pubsubContext context.Context
+	pubsubClient  *pubsub.Client
+}
 
 func NewServer() *Server {
-	return &Server{}
+	ctx := context.Background()
+	c, err := pubsub.NewClient(ctx, *googleProject)
+	if err != nil {
+		log.Errorf("pubsub.NewClient: %v", err)
+	}
+
+	return &Server{
+		pubsubContext: ctx,
+		pubsubClient:  c,
+	}
 }
 
 func (s *Server) Run() {
@@ -122,17 +134,9 @@ func (s *Server) fluxEventV6Handler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	ctx := context.Background()
-	client, err := pubsub.NewClient(ctx, *googleProject)
-	if err != nil {
-		log.WithField("path", path).Errorf("pubsub.NewClient: %v", err)
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	t := client.Topic(*pubsubTopic)
-	result := t.Publish(ctx, &pubsub.Message{Data: eventStr})
-	id, err := result.Get(ctx)
+	t := s.pubsubClient.Topic(*pubsubTopic)
+	result := t.Publish(s.pubsubContext, &pubsub.Message{Data: eventStr})
+	id, err := result.Get(s.pubsubContext)
 	if err != nil {
 		log.WithField("path", path).Errorf("Get: %v", err)
 		http.Error(w, err.Error(), 500)
