@@ -53,6 +53,7 @@ func NewServer() (*Server, error) {
 func (s *Server) Run() {
 	r := mux.NewRouter()
 	r.HandleFunc("/", s.websocketHandler)
+	r.HandleFunc("/v11/daemon", s.websocketHandler)
 	r.HandleFunc("/v6/events", s.fluxEventV6Handler).Methods("POST")
 
 	srv := &http.Server{
