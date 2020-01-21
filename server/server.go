@@ -151,7 +151,6 @@ func (s *Server) fluxEventV6Handler(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), 400)
 		return
 	}
-	log.WithField("path", path).Debugf("Retrieved event: %s", eventStr)
 
 	err = json.NewDecoder(bytes.NewBuffer(eventStr)).Decode(&event)
 	if err != nil {
@@ -168,6 +167,8 @@ func (s *Server) fluxEventV6Handler(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
+
+	log.WithField("path", path).Debugf("Retrieved event: %s", eventStr)
 
 	t := s.pubsubClient.Topic(*pubsubTopic)
 	result := t.Publish(s.pubsubContext, &pubsub.Message{Data: eventStr})
