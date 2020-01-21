@@ -24,7 +24,7 @@ var (
 	listenAddress = command.Flag("listen-address", "HTTP address").Default(":8080").String()
 	googleProject = command.Flag("google-project", "Google project").Required().String()
 	pubsubTopic   = command.Flag("google-pubsub-topic", "Google pubsub topic").Required().String()
-	labels        = command.Flag("additional-labels", "Additional labels in event, key=value").Short('l').Strings()
+	labels        = command.Flag("labels", "Add additional labels to event, key=value").Short('l').Strings()
 
 	upgrader = websocket.Upgrader{}
 )
