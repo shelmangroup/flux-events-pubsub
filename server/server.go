@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"time"
 
 	"cloud.google.com/go/pubsub"
@@ -24,7 +23,7 @@ var (
 	listenAddress = command.Flag("listen-address", "HTTP address").Default(":8080").String()
 	googleProject = command.Flag("google-project", "Google project").Required().String()
 	pubsubTopic   = command.Flag("google-pubsub-topic", "Google pubsub topic").Required().String()
-	labels        = command.Flag("labels", "Add additional labels to event, key=value").Short('l').Strings()
+	labels        = command.Flag("labels", "Add additional labels to event, key=value").Short('l').StringMap()
 
 	upgrader = websocket.Upgrader{}
 )
@@ -124,15 +123,10 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
-func (s *Server) extendEvent(event fluxevent.Event, labels []string) ([]byte, error) {
-	labelsMap := make(map[string]string)
-	for _, label := range labels {
-		l := strings.Split(label, "=")
-		labelsMap[l[0]] = l[1]
-	}
+func (s *Server) extendEvent(event fluxevent.Event, labels map[string]string) ([]byte, error) {
 	extendedEvent := ExtendedEvent{
 		Event:  event,
-		Labels: labelsMap,
+		Labels: labels,
 	}
 	e, err := json.Marshal(extendedEvent)
 	if err != nil {
