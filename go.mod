@@ -11,6 +11,7 @@ require (
 	github.com/fluxcd/flux v1.17.1
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/websocket v1.4.1
+	github.com/joonix/log v0.0.0-20190524090622-13fe31bbdd7a
 	github.com/sirupsen/logrus v1.4.2
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 )

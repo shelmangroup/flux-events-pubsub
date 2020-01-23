@@ -4,14 +4,16 @@ import (
 	"os"
 	"strings"
 
+	joonix "github.com/joonix/log"
 	"github.com/shelmangroup/flux-events-pubsub/server"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	logJSON  = kingpin.Flag("log-json", "Use structured logging in JSON format").Default("false").Bool()
-	logLevel = kingpin.Flag("log-level", "The level of logging").Default("info").Enum("debug", "info", "warn", "error", "panic", "fatal")
+	logJSON    = kingpin.Flag("log-json", "Use structured logging in JSON format").Default("false").Bool()
+	logFluentd = kingpin.Flag("log-fluentd", "Use structured logging in GKE Fluentd format").Default("false").Bool()
+	logLevel   = kingpin.Flag("log-level", "The level of logging").Default("info").Enum("debug", "info", "warn", "error", "panic", "fatal")
 )
 
 func main() {
@@ -34,6 +36,9 @@ func main() {
 
 	if *logJSON {
 		log.SetFormatter(&log.JSONFormatter{})
+	}
+	if *logFluentd {
+		log.SetFormatter(joonix.NewFormatter())
 	}
 
 	log.SetOutput(os.Stderr)
