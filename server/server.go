@@ -116,13 +116,6 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 				log.WithField("path", path).Errorf("Ping: %s", err)
 				return
 			}
-			v, err := s.rpcClient.Version(ctx)
-			if err != nil {
-				log.WithField("path", path).Errorf("Version: %s", err)
-				return
-			}
-			log.WithField("path", path).Infof("Flux Version: %s", v)
-
 		case <-disconnect:
 			log.WithField("path", path).Infof("client disconnected")
 			c.Close()
