@@ -12,8 +12,9 @@ import (
 
 	"cloud.google.com/go/pubsub"
 	fluxevent "github.com/fluxcd/flux/pkg/event"
+	"github.com/fluxcd/flux/pkg/http/websocket"
+	"github.com/fluxcd/flux/pkg/remote/rpc"
 	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -24,8 +25,6 @@ var (
 	googleProject = command.Flag("google-project", "Google project").Required().String()
 	pubsubTopic   = command.Flag("google-pubsub-topic", "Google pubsub topic").Required().String()
 	labels        = command.Flag("labels", "Add additional labels to event, key=value").Short('l').StringMap()
-
-	upgrader = websocket.Upgrader{}
 )
 
 func FullCommand() string {
@@ -35,6 +34,7 @@ func FullCommand() string {
 type Server struct {
 	pubsubContext context.Context
 	pubsubClient  *pubsub.Client
+	rpcClient     *rpc.RPCClientV11
 }
 
 type ExtendedEvent struct {
@@ -94,33 +94,40 @@ func (s *Server) Run() {
 
 func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 	path := req.URL.Path
-	c, err := upgrader.Upgrade(w, req, nil)
+	c, err := websocket.Upgrade(w, req, nil)
 	if err != nil {
 		log.WithField("path", path).Errorf("Upgrade: %s", err)
 		return
 	}
 
-	defer func() {
-		log.WithField("path", path).Infof("client disconnected")
-		c.Close()
-	}()
-
 	log.WithField("path", path).Infof("client connected")
-	for {
-		mt, message, err := c.ReadMessage()
-		if err != nil {
-			log.WithField("path", path).Errorf("read: %s", err)
-			break
-		}
-		log.WithField("path", path).Infof("recv: %s", message)
 
-		err = c.WriteMessage(mt, message)
-		if err != nil {
-			log.WithField("path", path).Errorf("write: %s", err)
-			break
+	s.rpcClient = rpc.NewClientV11(c)
+	ctx := context.Background()
+	disconnect := make(chan struct{})
+	defer close(disconnect)
+
+	t := time.NewTicker(5 * time.Second)
+	for {
+		select {
+		case <-t.C:
+			err := s.rpcClient.Ping(ctx)
+			if err != nil {
+				log.WithField("path", path).Errorf("Ping: %s", err)
+				return
+			}
+			v, err := s.rpcClient.Version(ctx)
+			if err != nil {
+				log.WithField("path", path).Errorf("Version: %s", err)
+				return
+			}
+			log.WithField("path", path).Infof("Flux Version: %s", v)
+
+		case <-disconnect:
+			log.WithField("path", path).Infof("client disconnected")
+			c.Close()
 		}
 	}
-	return
 }
 
 func (s *Server) extendEvent(event fluxevent.Event, labels map[string]string) ([]byte, error) {
