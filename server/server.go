@@ -20,11 +20,13 @@ import (
 )
 
 var (
-	command       = kingpin.Command("server", "Start http server")
-	listenAddress = command.Flag("listen-address", "HTTP address").Default(":8080").String()
-	googleProject = command.Flag("google-project", "Google project").Required().String()
-	pubsubTopic   = command.Flag("google-pubsub-topic", "Google pubsub topic").Required().String()
-	labels        = command.Flag("labels", "Add additional labels to event, key=value").Short('l').StringMap()
+	command            = kingpin.Command("server", "Start http server")
+	listenAddress      = command.Flag("listen-address", "HTTP address").Default(":8080").String()
+	googleProject      = command.Flag("google-project", "Google project").Required().String()
+	pubsubTopicEvents  = command.Flag("google-pubsub-topic", "Google pubsub topic for events").Required().String()
+	pubsubTopicActions = command.Flag("google-pubsub-topic-actions", "Google pubsub topic for actions").Required().String()
+	pubsubSubscription = command.Flag("google-pubsub-subscription", "Google pubsub subscription").Required().String()
+	labels             = command.Flag("labels", "Add additional labels to event, key=value").Short('l').StringMap()
 )
 
 func FullCommand() string {
@@ -35,11 +37,16 @@ type Server struct {
 	pubsubContext context.Context
 	pubsubClient  *pubsub.Client
 	rpcClient     *rpc.RPCClientV11
+	quit          chan struct{}
 }
 
 type ExtendedEvent struct {
 	fluxevent.Event
 	Labels map[string]string `json:"labels,omitempty"`
+}
+
+type ActionEvent struct {
+	Type string `json:"type"`
 }
 
 func NewServer() (*Server, error) {
@@ -53,6 +60,7 @@ func NewServer() (*Server, error) {
 	return &Server{
 		pubsubContext: ctx,
 		pubsubClient:  c,
+		quit:          make(chan struct{}),
 	}, nil
 }
 
@@ -75,21 +83,96 @@ func (s *Server) Run() {
 		if err := srv.ListenAndServe(); err != nil {
 			log.Error(err)
 		}
+		close(s.quit)
+	}()
+	go func() {
+		log.Infof("Starting pubsub subscriber for actions on %s", *pubsubTopicActions)
+		if err := s.subscriber(); err != nil {
+			log.Error(err)
+		}
+		close(s.quit)
 	}()
 
 	c := make(chan os.Signal, 1)
-	// We'll accept graceful shutdowns when quit via SIGINT (Ctrl+C)
-	// SIGKILL, SIGQUIT or SIGTERM (Ctrl+/) will not be caught.
 	signal.Notify(c, os.Interrupt)
 
-	// Block until we receive our signal.
-	<-c
+	for {
+		select {
+		case <-c:
+			s.gracefulShutdown(srv)
+			return
+		case <-s.quit:
+			s.gracefulShutdown(srv)
+			return
+		}
+	}
+}
 
-	// Create a deadline to wait for.
+func (s *Server) gracefulShutdown(srv *http.Server) {
+	log.Info("Try to gracefully shutdown")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 	srv.Shutdown(ctx)
-	log.Infof("Shutting down")
+	s.pubsubClient.Close()
+	return
+}
+
+func (s *Server) subscriber() error {
+	ctx := context.Background()
+	topic := s.pubsubClient.Topic(*pubsubTopicActions)
+	exists, err := topic.Exists(ctx)
+	if !exists || err != nil {
+		return err
+	}
+
+	sub := s.pubsubClient.Subscription(*pubsubSubscription)
+	subExists, err := sub.Exists(ctx)
+	if err != nil {
+		return err
+	}
+
+	if !subExists {
+		sub, err = s.pubsubClient.CreateSubscription(ctx, *pubsubSubscription, pubsub.SubscriptionConfig{
+			Topic:            topic,
+			AckDeadline:      10 * time.Second,
+			ExpirationPolicy: time.Duration(0),
+		})
+		if err != nil {
+			return err
+		}
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	cm := make(chan *pubsub.Message)
+	go func() {
+		for {
+			select {
+			case msg := <-cm:
+				if s.rpcClient == nil {
+					log.WithField("subscription", *pubsubSubscription).Errorf("No client connected")
+					continue
+				}
+				if err := s.rpcClient.SyncNotify(ctx); err != nil {
+					log.WithField("subscription", *pubsubSubscription).Error(err)
+					continue
+				}
+				msg.Ack()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	// Receive blocks until the context is cancelled or an error occurs.
+	err = sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
+		cm <- msg
+	})
+	if err != nil {
+		return err
+	}
+	close(cm)
+	return nil
 }
 
 func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
@@ -161,7 +244,7 @@ func (s *Server) fluxEventV6Handler(w http.ResponseWriter, req *http.Request) {
 
 	log.WithField("path", path).Debugf("Retrieved event: %s", eventStr)
 
-	t := s.pubsubClient.Topic(*pubsubTopic)
+	t := s.pubsubClient.Topic(*pubsubTopicEvents)
 	result := t.Publish(s.pubsubContext, &pubsub.Message{Data: eventStr})
 	id, err := result.Get(s.pubsubContext)
 	if err != nil {
