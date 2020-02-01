@@ -99,14 +99,14 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 		log.WithField("path", path).Errorf("Upgrade: %s", err)
 		return
 	}
-
 	log.WithField("path", path).Infof("client connected")
+	defer func() {
+		log.WithField("path", path).Infof("client disconnected")
+		c.Close()
+	}()
 
 	s.rpcClient = rpc.NewClientV11(c)
 	ctx := context.Background()
-	disconnect := make(chan struct{})
-	defer close(disconnect)
-
 	t := time.NewTicker(5 * time.Second)
 	for {
 		select {
@@ -116,9 +116,6 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 				log.WithField("path", path).Errorf("Ping: %s", err)
 				return
 			}
-		case <-disconnect:
-			log.WithField("path", path).Infof("client disconnected")
-			c.Close()
 		}
 	}
 }
