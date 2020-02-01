@@ -154,6 +154,8 @@ func (s *Server) subscriber() error {
 			case msg := <-cm:
 				if s.rpcClient == nil {
 					log.WithField("subscription", *pubsubSubscription).Warn("No client connected")
+					msg.Ack()
+					continue
 				}
 				if err := s.rpcClient.SyncNotify(ctx); err != nil {
 					log.WithField("subscription", *pubsubSubscription).Error(err)
