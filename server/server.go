@@ -87,7 +87,7 @@ func (s *Server) Run() {
 		close(s.quit)
 	}()
 	go func() {
-		log.Infof("Starting pubsub subscriber for actions on %s", *pubsubTopicActions)
+		log.Infof("Listening for events on %s", *pubsubTopicActions)
 		if err := s.subscriber(); err != nil {
 			log.Errorf("subscriber error: %s", err)
 		}
