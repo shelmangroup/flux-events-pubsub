@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -81,14 +82,14 @@ func (s *Server) Run() {
 	go func() {
 		log.Infof("Starting server on %s", *listenAddress)
 		if err := srv.ListenAndServe(); err != nil {
-			log.Error(err)
+			log.Errorf("http server error: %s", err)
 		}
 		close(s.quit)
 	}()
 	go func() {
 		log.Infof("Starting pubsub subscriber for actions on %s", *pubsubTopicActions)
 		if err := s.subscriber(); err != nil {
-			log.Error(err)
+			log.Errorf("subscriber error: %s", err)
 		}
 		close(s.quit)
 	}()
@@ -99,9 +100,11 @@ func (s *Server) Run() {
 	for {
 		select {
 		case <-c:
+			log.Info("Interrupt")
 			s.gracefulShutdown(srv)
 			return
 		case <-s.quit:
+			log.Info("Quitting")
 			s.gracefulShutdown(srv)
 			return
 		}
@@ -109,7 +112,6 @@ func (s *Server) Run() {
 }
 
 func (s *Server) gracefulShutdown(srv *http.Server) {
-	log.Info("Try to gracefully shutdown")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 	srv.Shutdown(ctx)
@@ -120,9 +122,12 @@ func (s *Server) gracefulShutdown(srv *http.Server) {
 func (s *Server) subscriber() error {
 	ctx := context.Background()
 	topic := s.pubsubClient.Topic(*pubsubTopicActions)
-	exists, err := topic.Exists(ctx)
-	if !exists || err != nil {
+	topicExists, err := topic.Exists(ctx)
+	if err != nil {
 		return err
+	}
+	if !topicExists {
+		return fmt.Errorf("topic %s doesn't exist", *pubsubTopicActions)
 	}
 
 	sub := s.pubsubClient.Subscription(*pubsubSubscription)
@@ -141,8 +146,6 @@ func (s *Server) subscriber() error {
 			return err
 		}
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
 
 	cm := make(chan *pubsub.Message)
 	go func() {
@@ -150,16 +153,12 @@ func (s *Server) subscriber() error {
 			select {
 			case msg := <-cm:
 				if s.rpcClient == nil {
-					log.WithField("subscription", *pubsubSubscription).Errorf("No client connected")
-					continue
+					log.WithField("subscription", *pubsubSubscription).Warn("No client connected")
 				}
 				if err := s.rpcClient.SyncNotify(ctx); err != nil {
 					log.WithField("subscription", *pubsubSubscription).Error(err)
-					continue
 				}
 				msg.Ack()
-			case <-ctx.Done():
-				return
 			}
 		}
 	}()
