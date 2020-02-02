@@ -167,6 +167,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	defer c.Close()
 	rpcClient := rpc.NewClientV11(c)
+	ctx := req.Context()
 
 	messageChan := make(chan []byte)
 	s.broker.newClients <- messageChan
@@ -174,17 +175,32 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 		s.broker.closingClients <- messageChan
 	}()
 
+	v, err := rpcClient.Version(ctx)
+	if err != nil {
+		log.WithField("path", path).Errorf("Version: %s", err)
+		return
+	}
+	log.WithField("path", path).Infof("client version: %s", v)
+
+	e, err := rpcClient.Export(ctx)
+	if err != nil {
+		log.WithField("path", path).Errorf("Export: %s", err)
+		return
+	}
+	log.WithField("path", path).Infof("client config: %s", string(e))
+
 	for {
 		select {
 		case m := <-messageChan:
 			log.WithField("path", path).Infof("Event: %s", string(m))
-			err := rpcClient.NotifyChange(req.Context(), v9.Change{Kind: v9.GitChange})
+			err := rpcClient.NotifyChange(ctx, v9.Change{Kind: v9.GitChange})
 			if err != nil {
 				log.WithField("path", path).Errorf("NotifyChange: %s", err)
 				return
 			}
-		case <-req.Context().Done():
+		case <-ctx.Done():
 			s.broker.closingClients <- messageChan
+			return
 		}
 	}
 }
