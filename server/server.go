@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
+	v9 "github.com/fluxcd/flux/pkg/api/v9"
 	fluxevent "github.com/fluxcd/flux/pkg/event"
 	"github.com/fluxcd/flux/pkg/http/websocket"
 	"github.com/fluxcd/flux/pkg/remote/rpc"
@@ -157,7 +158,10 @@ func (s *Server) subscriber() error {
 					msg.Ack()
 					continue
 				}
-				if err := s.rpcClient.SyncNotify(ctx); err != nil {
+				c := v9.Change{
+					Kind: "git",
+				}
+				if err := s.rpcClient.NotifyChange(ctx, c); err != nil {
 					log.WithField("subscription", *pubsubSubscription).Error(err)
 				}
 				msg.Ack()
