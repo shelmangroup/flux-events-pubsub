@@ -158,10 +158,7 @@ func (s *Server) subscriber() error {
 					msg.Ack()
 					continue
 				}
-				c := v9.Change{
-					Kind: "git",
-				}
-				if err := s.rpcClient.NotifyChange(ctx, c); err != nil {
+				if err := s.rpcClient.NotifyChange(ctx, v9.Change{Kind: "git"}); err != nil {
 					log.WithField("subscription", *pubsubSubscription).Error(err)
 				}
 				msg.Ack()
