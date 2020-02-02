@@ -181,14 +181,6 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	log.WithField("path", path).Infof("client version: %s", v)
-
-	e, err := rpcClient.Export(ctx)
-	if err != nil {
-		log.WithField("path", path).Errorf("Export: %s", err)
-		return
-	}
-	log.WithField("path", path).Infof("client config: %s", string(e))
-
 	for {
 		select {
 		case m := <-messageChan:
