@@ -165,11 +165,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 		log.WithField("path", path).Errorf("Upgrade: %s", err)
 		return
 	}
-	log.WithField("path", path).Infof("client connected")
-	defer func() {
-		log.WithField("path", path).Infof("client disconnected")
-		c.Close()
-	}()
+	defer c.Close()
 	rpcClient := rpc.NewClientV11(c)
 
 	messageChan := make(chan []byte)
@@ -178,21 +174,17 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 		s.broker.closingClients <- messageChan
 	}()
 
-	notify := req.Context().Done()
-	go func() {
-		<-notify
-		s.broker.closingClients <- messageChan
-	}()
-
 	for {
 		select {
 		case m := <-messageChan:
-			log.WithField("path", path).Infof("Event: %s", m)
+			log.WithField("path", path).Infof("Event: %s", string(m))
 			err := rpcClient.NotifyChange(req.Context(), v9.Change{Kind: v9.GitChange})
 			if err != nil {
 				log.WithField("path", path).Errorf("NotifyChange: %s", err)
 				return
 			}
+		case <-req.Context().Done():
+			s.broker.closingClients <- messageChan
 		}
 	}
 }
