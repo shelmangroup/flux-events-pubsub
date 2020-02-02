@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/pubsub"
-	v9 "github.com/fluxcd/flux/pkg/api/v9"
+	"github.com/fluxcd/flux/pkg/api/v9"
 	fluxevent "github.com/fluxcd/flux/pkg/event"
 	"github.com/fluxcd/flux/pkg/http/websocket"
 	"github.com/fluxcd/flux/pkg/remote/rpc"
@@ -38,7 +38,7 @@ func FullCommand() string {
 type Server struct {
 	pubsubContext context.Context
 	pubsubClient  *pubsub.Client
-	rpcClient     *rpc.RPCClientV11
+	broker        *Broker
 	quit          chan struct{}
 }
 
@@ -62,13 +62,13 @@ func NewServer() (*Server, error) {
 	return &Server{
 		pubsubContext: ctx,
 		pubsubClient:  c,
+		broker:        NewBroker(),
 		quit:          make(chan struct{}),
 	}, nil
 }
 
 func (s *Server) Run() {
 	r := mux.NewRouter()
-	r.HandleFunc("/", s.websocketHandler)
 	r.HandleFunc("/v11/daemon", s.websocketHandler)
 	r.HandleFunc("/v6/events", s.fluxEventV6Handler).Methods("POST")
 
@@ -148,32 +148,13 @@ func (s *Server) subscriber() error {
 		}
 	}
 
-	cm := make(chan *pubsub.Message)
-	go func() {
-		for {
-			select {
-			case msg := <-cm:
-				if s.rpcClient == nil {
-					log.WithField("subscription", *pubsubSubscription).Warn("No client connected")
-					msg.Ack()
-					continue
-				}
-				if err := s.rpcClient.NotifyChange(ctx, v9.Change{Kind: "git"}); err != nil {
-					log.WithField("subscription", *pubsubSubscription).Error(err)
-				}
-				msg.Ack()
-			}
-		}
-	}()
-
-	// Receive blocks until the context is cancelled or an error occurs.
 	err = sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
-		cm <- msg
+		s.broker.Notifier <- msg.Data
+		msg.Ack()
 	})
 	if err != nil {
 		return err
 	}
-	close(cm)
 	return nil
 }
 
@@ -189,16 +170,27 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 		log.WithField("path", path).Infof("client disconnected")
 		c.Close()
 	}()
+	rpcClient := rpc.NewClientV11(c)
 
-	s.rpcClient = rpc.NewClientV11(c)
-	ctx := context.Background()
-	t := time.NewTicker(5 * time.Second)
+	messageChan := make(chan []byte)
+	s.broker.newClients <- messageChan
+	defer func() {
+		s.broker.closingClients <- messageChan
+	}()
+
+	notify := req.Context().Done()
+	go func() {
+		<-notify
+		s.broker.closingClients <- messageChan
+	}()
+
 	for {
 		select {
-		case <-t.C:
-			err := s.rpcClient.Ping(ctx)
+		case m := <-messageChan:
+			log.WithField("path", path).Infof("Event: %s", m)
+			err := rpcClient.NotifyChange(req.Context(), v9.Change{Kind: v9.GitChange})
 			if err != nil {
-				log.WithField("path", path).Errorf("Ping: %s", err)
+				log.WithField("path", path).Errorf("NotifyChange: %s", err)
 				return
 			}
 		}
