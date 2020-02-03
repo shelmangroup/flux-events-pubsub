@@ -1,33 +1,94 @@
-[![Docker Repository on Quay](https://quay.io/repository/shelman/flux-events-pubsub/status "Docker Repository on Quay")](https://quay.io/repository/shelman/flux-events-pubsub)
-
 # Flux-events-pubsub
 
-Publish and subscribe fluxcd events on pubsub
+Let your [FluxCD](https://fluxcd.io) daemon connect to flux-events-pubsub as
+upstream controlplane. Flux-events-pubsub will subscribe to a Google pubsub topic
+and notify the FluxCD daemons upon changes which will trigger a fluxCD Sync.
 
+FluxCD events (Commit, Sync and Release events) will also be published to pubsub topic
+for later consumtion of different services.
+
+## Example use cases that consume pubsub events.
+- Github WebHooks
+- Chat bots
+- Trigger test suites
+- etc.
+
+## Example deployment
+
+Kubernetes manifest example
+```yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flux-events
+  namespace: flux
+  labels:
+    app: flux-events
+spec:
+  type: ClusterIP
+  selector:
+    app: flux-events
+  ports:
+  - name: http
+    port: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flux-events
+  namespace: flux
+  labels:
+    app: flux-events
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flux-events
+  template:
+    metadata:
+      labels:
+        app: flux-events
+    spec:
+      containers:
+      - image: quay.io/shelman/flux-events-pubsub:latest
+        name: flux-events
+        args:
+          - --log-level=debug
+          - --log-json
+          # Optionally add labels that will be append to the FluxCD json payload event.
+          - -lmy-custom-label1=foo
+          - -lmy-custom-label2=bar
+        env:
+          - name: GOOGLE_APPLICATION_CREDENTIALS
+            value: "/secrets/pubsub-credentials"
+          - name: FLUX_EVENTS_PUBSUB_GOOGLE_PROJECT
+            value: "my-google-project"
+          - name: FLUX_EVENTS_PUBSUB_GOOGLE_PUBSUB_TOPIC
+            value: "flux-events"
+            # Flux-events-pubsub will subscribe to this topic to trigger FluxCD Sync Actions.
+          - name: FLUX_EVENTS_PUBSUB_GOOGLE_PUBSUB_TOPIC_ACTIONS
+            value: "flux-actions"
+          - name: FLUX_EVENTS_PUBSUB_GOOGLE_PUBSUB_SUBSCRIPTION
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+        volumeMounts:
+          - mountPath: /secrets
+            name: gcp-credentials
+      volumes:
+        - name: gcp-credentials
+          secret:
+            secretName: gcp-credentials
+            defaultMode: 0600
 ```
-usage: flux-events-pubsub [<flags>] <command> [<args> ...]
 
-Flags:
-  -h, --help            Show context-sensitive help (also try --help-long and --help-man).
-      --log-json        Use structured logging in JSON format
-      --log-fluentd     Use structured logging in GKE Fluentd format
-      --log-level=info  The level of logging
-
-Commands:
-  help [<command>...]
-    Show help.
-
-
-  server --google-project=GOOGLE-PROJECT --google-pubsub-topic=GOOGLE-PUBSUB-TOPIC --google-pubsub-topic-actions=GOOGLE-PUBSUB-TOPIC-ACTIONS --google-pubsub-subscription=GOOGLE-PUBSUB-SUBSCRIPTION [<flags>]
-    Start http server
-
-        --listen-address=":8080"  HTTP address
-        --google-project=GOOGLE-PROJECT
-                                  Google project
-        --google-pubsub-topic=GOOGLE-PUBSUB-TOPIC
-                                  Google pubsub topic for events
-        --google-pubsub-topic-actions=GOOGLE-PUBSUB-TOPIC-ACTIONS
-                                  Google pubsub topic for actions
-        --google-pubsub-subscription=GOOGLE-PUBSUB-SUBSCRIPTION
-                                  Google pubsub subscription
-    -l, --labels=LABELS ...       Add additional labels to event, key=value```
+### Connect FluxCD with an upstream
+Add `--connect=ws://flux-events:8080` argument to fluxcd deployment manifest.
