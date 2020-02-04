@@ -1,4 +1,4 @@
-name: Go
+name: CI
 on:
   push:
     branches:
@@ -35,7 +35,7 @@ jobs:
       run: |
         docker build -t "$REGISTRY_HOSTNAME"/"$IMAGE":"$GITHUB_SHA" .
 
-    - name: Publish image
+    - name: Publish docker image
       run: |
         docker login -u "$REGISTRY_USERNAME" -p "$REGISTRY_PASSWORD" "$REGISTRY_HOSTNAME"
         docker push $REGISTRY_HOSTNAME/$IMAGE:$GITHUB_SHA
