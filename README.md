@@ -1,3 +1,4 @@
+![CI](https://github.com/shelmangroup/flux-events-pubsub/workflows/CI/badge.svg?branch=master)
 # Flux-events-pubsub
 
 Let your [FluxCD](https://fluxcd.io) daemon connect to flux-events-pubsub as
