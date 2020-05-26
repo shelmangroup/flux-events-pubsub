@@ -11,8 +11,10 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/shelmangroup/flux-events-pubsub/pkg"
+
 	"cloud.google.com/go/pubsub"
-	"github.com/fluxcd/flux/pkg/api/v9"
+	v9 "github.com/fluxcd/flux/pkg/api/v9"
 	fluxevent "github.com/fluxcd/flux/pkg/event"
 	"github.com/fluxcd/flux/pkg/http/websocket"
 	"github.com/fluxcd/flux/pkg/remote/rpc"
@@ -160,13 +162,13 @@ func (s *Server) subscriber() error {
 
 func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 	path := req.URL.Path
-	c, err := websocket.Upgrade(w, req, nil)
+	upgradedWebsocket, err := websocket.Upgrade(w, req, nil)
 	if err != nil {
 		log.WithField("path", path).Errorf("Upgrade: %s", err)
 		return
 	}
-	defer c.Close()
-	rpcClient := rpc.NewClientV11(c)
+	defer upgradedWebsocket.Close()
+	rpcClient := rpc.NewClientV11(upgradedWebsocket)
 	ctx := req.Context()
 
 	messageChan := make(chan []byte)
@@ -175,12 +177,20 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 		s.broker.closingClients <- messageChan
 	}()
 
-	v, err := rpcClient.Version(ctx)
+	version, err := rpcClient.Version(ctx)
 	if err != nil {
 		log.WithField("path", path).Errorf("Version: %s", err)
 		return
 	}
-	log.WithField("path", path).Infof("client version: %s", v)
+	log.WithField("path", path).Infof("client version: %s", version)
+
+	gcrSubscriber, err := pkg.NewGCRSubscriber(*googleProject, "gcr", "gcr")
+	if err != nil {
+		log.WithField("path", path).Errorf("Version: %s", err)
+		return
+	}
+	gcrSubscriber.SubscribeToMessages()
+
 	for {
 		select {
 		case m := <-messageChan:
@@ -190,6 +200,9 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 				log.WithField("path", path).Errorf("NotifyChange: %s", err)
 				return
 			}
+		case m := <-gcrSubscriber.EventChan:
+			rpcClient.NotifyChange()
+			gcrSubscriber.GetImageChange()
 		case <-ctx.Done():
 			s.broker.closingClients <- messageChan
 			return
