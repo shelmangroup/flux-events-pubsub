@@ -81,7 +81,7 @@ type GCRSubscriber struct {
 	EventChan chan []byte
 }
 
-func (s *GCRSubscriber) SubscribeToMessages() error {
+func (s *GCRSubscriber) Subscriber() error {
 	cctx, _ := context.WithCancel(s.ctx)
 	err := s.sub.Receive(cctx, func(ctx context.Context, msg *pubsub.Message) {
 		message := GCRMessage{}

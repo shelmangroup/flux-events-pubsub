@@ -189,7 +189,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 		log.WithField("path", path).Errorf("Version: %s", err)
 		return
 	}
-	gcrSubscriber.SubscribeToMessages()
+	gcrSubscriber.Subscriber()
 
 	for {
 		select {
