@@ -99,12 +99,11 @@ func (s *GCRSubscriber) Subscriber() error {
 		if err != nil {
 			return
 		}
-		log.Infof("Got message: %#v\n", message)
-		//v9.ImageChange
-		//v9.ImageUpdate{}
+		log.Debugf("Subscriber got message: %#v\n", message)
+		s.SendNotification(message)
 	})
 	if err != nil {
-		return fmt.Errorf("Receive: %v", err)
+		return fmt.Errorf("Subscriber: %v", err)
 	}
 	return nil
 }
