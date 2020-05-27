@@ -108,6 +108,26 @@ func (s *GCRSubscriber) Subscriber() error {
 	return nil
 }
 
-func (s *GCRSubscriber) SendNotification(msg *GCRMessage) {
+func (s *GCRSubscriber) SendNotification(msg *GCRMessage) error {
+	ref, err := image.ParseRef(msg.Tag)
+	if err != nil {
+		log.Errorf("SendNotification failed to parse message tag with err: %s", err)
+		return err
+	}
+	change :=
+		v9.Change{
+			Kind: v9.ImageChange,
+			Source: v9.ImageUpdate{
+				Name: ref.Name,
+			},
+		}
+	timeout := time.Second * 10
+	ctx, _ := context.WithTimeout(s.ctx, timeout)
+	err = s.fluxRPC.NotifyChange(ctx, change)
+	if err != nil {
+		log.Errorf("SendNotification failed to send flux rpc with err: %s", err)
+		return err
+	}
 
+	return nil
 }
