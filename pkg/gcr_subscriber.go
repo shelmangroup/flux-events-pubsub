@@ -92,9 +92,9 @@ type GCRSubscriber struct {
 }
 
 func (s *GCRSubscriber) Subscriber() error {
-	cctx, _ := context.WithCancel(s.ctx)
-	err := s.sub.Receive(cctx, func(ctx context.Context, msg *pubsub.Message) {
-		message := GCRMessage{}
+	ctx, _ := context.WithCancel(s.ctx)
+	err := s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
+		message := &GCRMessage{}
 		err := message.fromJson(msg.Data)
 		if err != nil {
 			return
