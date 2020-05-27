@@ -212,6 +212,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 			err := s.gcrSubscriber.SendNotification(m, rpcClient)
 			if err != nil {
 				log.WithField("path", path).Errorf("gcrSubscriber.SendNotification: %s", err)
+				return
 			}
 		case <-ctx.Done():
 			s.broker.closingClients <- messageChan
