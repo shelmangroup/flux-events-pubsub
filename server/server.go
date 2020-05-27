@@ -24,13 +24,14 @@ import (
 )
 
 var (
-	command            = kingpin.Command("server", "Start http server")
-	listenAddress      = command.Flag("listen-address", "HTTP address").Default(":8080").String()
-	googleProject      = command.Flag("google-project", "Google project").Required().String()
-	pubsubTopicEvents  = command.Flag("google-pubsub-topic", "Google pubsub topic for events").Required().String()
-	pubsubTopicActions = command.Flag("google-pubsub-topic-actions", "Google pubsub topic for actions").Required().String()
-	pubsubSubscription = command.Flag("google-pubsub-subscription", "Google pubsub subscription").Required().String()
-	labels             = command.Flag("labels", "Add additional labels to event, key=value").Short('l').StringMap()
+	command                  = kingpin.Command("server", "Start http server")
+	listenAddress            = command.Flag("listen-address", "HTTP address").Default(":8080").String()
+	googleProject            = command.Flag("google-project", "Google project").Required().String()
+	googleProjectGcrLocation = command.Flag("google-project-gcr", "Google project were gcr is located").Required().String()
+	pubsubTopicEvents        = command.Flag("google-pubsub-topic", "Google pubsub topic for events").Required().String()
+	pubsubTopicActions       = command.Flag("google-pubsub-topic-actions", "Google pubsub topic for actions").Required().String()
+	pubsubSubscription       = command.Flag("google-pubsub-subscription", "Google pubsub subscription").Required().String()
+	labels                   = command.Flag("labels", "Add additional labels to event, key=value").Short('l').StringMap()
 )
 
 func FullCommand() string {
@@ -62,7 +63,7 @@ func NewServer() (*Server, error) {
 		return nil, err
 	}
 
-	gcrSubscriber, err := pkg.NewGCRSubscriber(ctx, *googleProject, "gcr", "gcr")
+	gcrSubscriber, err := pkg.NewGCRSubscriber(ctx, *googleProjectGcrLocation, "gcr", "gcr")
 	if err != nil {
 		log.Errorf("pubsub.NewGCRSubscriber: %v", err)
 		return nil, err
