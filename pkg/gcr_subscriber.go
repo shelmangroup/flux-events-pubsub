@@ -6,12 +6,23 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/fluxcd/flux/pkg/image"
+
+	v9 "github.com/fluxcd/flux/pkg/api/v9"
+
 	"github.com/fluxcd/flux/pkg/remote/rpc"
 
 	"cloud.google.com/go/pubsub"
 	log "github.com/sirupsen/logrus"
 )
 
+/*
+	{
+		Action:"INSERT",
+		Digest:"gcr.io/alex-dev-ne8701/testing@sha256:0b1e25fb646c62aff375bd5e6eb1b26a81abf2e9f5abb41f98acc88789c75434",
+		Tag:"gcr.io/alex-dev-ne8701/testing:873245"
+	}
+*/
 type GCRMessage struct {
 	Action string `json:"action"`
 	Digest string `json:"digest"`
@@ -34,8 +45,7 @@ func (g *GCRMessage) fromJson(data []byte) error {
 	return nil
 }
 
-func NewGCRSubscriber(projectID, topicID, subID string) (*GCRSubscriber, error) {
-	ctx := context.Background()
+func NewGCRSubscriber(ctx context.Context, projectID, topicID, subID string) (*GCRSubscriber, error) {
 	client, err := pubsub.NewClient(ctx, projectID)
 	if err != nil {
 		log.Errorf("pubsub.NewClient: %v", err)

@@ -184,7 +184,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	log.WithField("path", path).Infof("client version: %s", version)
 
-	gcrSubscriber, err := pkg.NewGCRSubscriber(*googleProject, "gcr", "gcr")
+	gcrSubscriber, err := pkg.NewGCRSubscriber(ctx, *googleProject, "gcr", "gcr")
 	if err != nil {
 		log.WithField("path", path).Errorf("Version: %s", err)
 		return
@@ -200,9 +200,6 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 				log.WithField("path", path).Errorf("NotifyChange: %s", err)
 				return
 			}
-		case m := <-gcrSubscriber.EventChan:
-			rpcClient.NotifyChange()
-			gcrSubscriber.GetImageChange()
 		case <-ctx.Done():
 			s.broker.closingClients <- messageChan
 			return
