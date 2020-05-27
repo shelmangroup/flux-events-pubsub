@@ -42,6 +42,7 @@ type Server struct {
 	pubsubClient  *pubsub.Client
 	broker        *Broker
 	quit          chan struct{}
+	gcrSubscriber *pkg.GCRSubscriber
 }
 
 type ExtendedEvent struct {
@@ -61,11 +62,18 @@ func NewServer() (*Server, error) {
 		return nil, err
 	}
 
+	gcrSubscriber, err := pkg.NewGCRSubscriber(ctx, *googleProject, "gcr", "gcr")
+	if err != nil {
+		log.Errorf("pubsub.NewGCRSubscriber: %v", err)
+		return nil, err
+	}
+
 	return &Server{
 		pubsubContext: ctx,
 		pubsubClient:  c,
 		broker:        NewBroker(),
 		quit:          make(chan struct{}),
+		gcrSubscriber: gcrSubscriber,
 	}, nil
 }
 
@@ -93,6 +101,13 @@ func (s *Server) Run() {
 		log.Infof("Listening for events on %s", *pubsubTopicActions)
 		if err := s.subscriber(); err != nil {
 			log.Errorf("subscriber error: %s", err)
+		}
+		close(s.quit)
+	}()
+	go func() {
+		log.Infof("Listening for events on gcr topic")
+		if err := s.gcrSubscriber.Subscriber(); err != nil {
+			log.Errorf("gcr subscriber error: %s", err)
 		}
 		close(s.quit)
 	}()
@@ -184,13 +199,6 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 	}
 	log.WithField("path", path).Infof("client version: %s", version)
 
-	gcrSubscriber, err := pkg.NewGCRSubscriber(ctx, *googleProject, "gcr", "gcr")
-	if err != nil {
-		log.WithField("path", path).Errorf("Version: %s", err)
-		return
-	}
-	gcrSubscriber.Subscriber()
-
 	for {
 		select {
 		case m := <-messageChan:
@@ -199,6 +207,11 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 			if err != nil {
 				log.WithField("path", path).Errorf("NotifyChange: %s", err)
 				return
+			}
+		case m := <-s.gcrSubscriber.MessageChan:
+			err := s.gcrSubscriber.SendNotification(m, rpcClient)
+			if err != nil {
+				log.WithField("path", path).Errorf("gcrSubscriber.SendNotification: %s", err)
 			}
 		case <-ctx.Done():
 			s.broker.closingClients <- messageChan

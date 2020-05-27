@@ -78,29 +78,29 @@ func NewGCRSubscriber(ctx context.Context, projectID, topicID, subID string) (*G
 		}
 	}
 
-	eventChan := make(chan []byte)
-	return &GCRSubscriber{ctx: ctx, client: client, topic: topic, sub: sub, EventChan: eventChan}, nil
+	eventChan := make(chan GCRMessage)
+	return &GCRSubscriber{ctx: ctx, client: client, topic: topic, sub: sub, MessageChan: eventChan}, nil
 }
 
 type GCRSubscriber struct {
-	ctx       context.Context
-	client    *pubsub.Client
-	topic     *pubsub.Topic
-	sub       *pubsub.Subscription
-	fluxRPC   *rpc.RPCClientV11
-	EventChan chan []byte
+	ctx         context.Context
+	client      *pubsub.Client
+	topic       *pubsub.Topic
+	sub         *pubsub.Subscription
+	fluxRPC     *rpc.RPCClientV11
+	MessageChan chan GCRMessage
 }
 
 func (s *GCRSubscriber) Subscriber() error {
 	ctx, _ := context.WithCancel(s.ctx)
 	err := s.sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
-		message := &GCRMessage{}
+		message := GCRMessage{}
 		err := message.fromJson(msg.Data)
 		if err != nil {
 			return
 		}
 		log.Debugf("Subscriber got message: %#v\n", message)
-		s.SendNotification(message)
+		s.MessageChan <- message
 	})
 	if err != nil {
 		return fmt.Errorf("Subscriber: %v", err)
@@ -108,7 +108,7 @@ func (s *GCRSubscriber) Subscriber() error {
 	return nil
 }
 
-func (s *GCRSubscriber) SendNotification(msg *GCRMessage) error {
+func (s *GCRSubscriber) SendNotification(msg GCRMessage, fluxRPC *rpc.RPCClientV11) error {
 	ref, err := image.ParseRef(msg.Tag)
 	if err != nil {
 		log.Errorf("SendNotification failed to parse message tag with err: %s", err)
@@ -123,7 +123,7 @@ func (s *GCRSubscriber) SendNotification(msg *GCRMessage) error {
 		}
 	timeout := time.Second * 10
 	ctx, _ := context.WithTimeout(s.ctx, timeout)
-	err = s.fluxRPC.NotifyChange(ctx, change)
+	err = fluxRPC.NotifyChange(ctx, change)
 	if err != nil {
 		log.Errorf("SendNotification failed to send flux rpc with err: %s", err)
 		return err
