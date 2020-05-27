@@ -208,7 +208,7 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 				log.WithField("path", path).Errorf("NotifyChange: %s", err)
 				return
 			}
-		case m := <-s.gcrSubscriber.MessageChan:
+		case m := <-s.gcrSubscriber.EventChan:
 			err := s.gcrSubscriber.SendNotification(m, rpcClient)
 			if err != nil {
 				log.WithField("path", path).Errorf("gcrSubscriber.SendNotification: %s", err)

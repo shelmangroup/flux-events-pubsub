@@ -79,16 +79,16 @@ func NewGCRSubscriber(ctx context.Context, projectID, topicID, subID string) (*G
 	}
 
 	eventChan := make(chan GCRMessage)
-	return &GCRSubscriber{ctx: ctx, client: client, topic: topic, sub: sub, MessageChan: eventChan}, nil
+	return &GCRSubscriber{ctx: ctx, client: client, topic: topic, sub: sub, EventChan: eventChan}, nil
 }
 
 type GCRSubscriber struct {
-	ctx         context.Context
-	client      *pubsub.Client
-	topic       *pubsub.Topic
-	sub         *pubsub.Subscription
-	fluxRPC     *rpc.RPCClientV11
-	MessageChan chan GCRMessage
+	ctx       context.Context
+	client    *pubsub.Client
+	topic     *pubsub.Topic
+	sub       *pubsub.Subscription
+	fluxRPC   *rpc.RPCClientV11
+	EventChan chan GCRMessage
 }
 
 func (s *GCRSubscriber) Subscriber() error {
@@ -100,7 +100,7 @@ func (s *GCRSubscriber) Subscriber() error {
 			return
 		}
 		log.Debugf("Subscriber got message: %#v\n", message)
-		s.MessageChan <- message
+		s.EventChan <- message
 	})
 	if err != nil {
 		return fmt.Errorf("Subscriber: %v", err)
