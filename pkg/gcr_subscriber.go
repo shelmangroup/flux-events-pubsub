@@ -58,7 +58,7 @@ func NewGCRSubscriber(ctx context.Context, projectID, topicID, subID string) (*G
 		return nil, err
 	}
 	if !topicExists {
-		return nil, fmt.Errorf("topic %s doesn't exist", topicID)
+		return nil, fmt.Errorf("NewGCRSubscriber topic %s doesn't exist", topicID)
 	}
 
 	sub := client.Subscription(subID)
