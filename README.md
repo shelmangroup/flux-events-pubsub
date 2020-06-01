@@ -8,13 +8,22 @@ and notify the FluxCD daemons upon changes which will trigger a fluxCD Sync.
 FluxCD events (Commit, Sync and Release events) will also be published to pubsub topic
 for later consumtion of different services.
 
+FluxCD events for Google container regetry updates. (no updates are sent to other topics
+for this changes)
+
 ## Example use cases that consume pubsub events.
 - Github WebHooks
 - Chat bots
 - Trigger test suites
 - etc.
 
+## Example PubSub conf for gcr events
+```bash
+gcloud pubsub topics create gcr
+```
+
 ## Example deployment
+
 
 Kubernetes manifest example
 ```yaml
@@ -61,6 +70,8 @@ spec:
           - -lmy-custom-label1=foo
           - -lmy-custom-label2=bar
         env:
+          - name: FLUX_EVENTS_PUBSUB_GOOGLE_PROJECT_GCR
+            value: "my gcr project"
           - name: GOOGLE_APPLICATION_CREDENTIALS
             value: "/secrets/pubsub-credentials"
           - name: FLUX_EVENTS_PUBSUB_GOOGLE_PROJECT
