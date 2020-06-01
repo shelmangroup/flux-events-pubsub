@@ -99,10 +99,10 @@ func (s *GCRSubscriber) Subscriber() error {
 		if err != nil {
 			return
 		}
-		log.Debugf("Subscriber.recived message.tag: %v\n", message.Tag)
+		log.Debugf("Subscriber.recived message.tag: %v", message.Tag)
 		s.EventChan <- message
 		msg.Ack()
-		log.Debugf("Subscriber.acked message.tag: %v\n", message.Tag)
+		log.Debugf("Subscriber.acked message.tag: %v", message.Tag)
 	})
 	if err != nil {
 		return fmt.Errorf("Subscriber: %v", err)
