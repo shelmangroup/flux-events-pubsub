@@ -101,6 +101,7 @@ func (s *GCRSubscriber) Subscriber() error {
 		}
 		log.Debugf("Subscriber got message: %#v\n", message)
 		s.EventChan <- message
+		msg.Ack()
 	})
 	if err != nil {
 		return fmt.Errorf("Subscriber: %v", err)
