@@ -1,1 +1,4 @@
 flux-events-pubsub
+.idea/
+vendor
+deployment.yaml

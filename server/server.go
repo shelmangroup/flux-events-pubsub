@@ -11,8 +11,10 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/shelmangroup/flux-events-pubsub/pkg"
+
 	"cloud.google.com/go/pubsub"
-	"github.com/fluxcd/flux/pkg/api/v9"
+	v9 "github.com/fluxcd/flux/pkg/api/v9"
 	fluxevent "github.com/fluxcd/flux/pkg/event"
 	"github.com/fluxcd/flux/pkg/http/websocket"
 	"github.com/fluxcd/flux/pkg/remote/rpc"
@@ -22,13 +24,14 @@ import (
 )
 
 var (
-	command            = kingpin.Command("server", "Start http server")
-	listenAddress      = command.Flag("listen-address", "HTTP address").Default(":8080").String()
-	googleProject      = command.Flag("google-project", "Google project").Required().String()
-	pubsubTopicEvents  = command.Flag("google-pubsub-topic", "Google pubsub topic for events").Required().String()
-	pubsubTopicActions = command.Flag("google-pubsub-topic-actions", "Google pubsub topic for actions").Required().String()
-	pubsubSubscription = command.Flag("google-pubsub-subscription", "Google pubsub subscription").Required().String()
-	labels             = command.Flag("labels", "Add additional labels to event, key=value").Short('l').StringMap()
+	command                  = kingpin.Command("server", "Start http server")
+	listenAddress            = command.Flag("listen-address", "HTTP address").Default(":8080").String()
+	googleProject            = command.Flag("google-project", "Google project").Required().String()
+	googleProjectGcrLocation = command.Flag("google-project-gcr", "Google project were gcr is located").Required().String()
+	pubsubTopicEvents        = command.Flag("google-pubsub-topic", "Google pubsub topic for events").Required().String()
+	pubsubTopicActions       = command.Flag("google-pubsub-topic-actions", "Google pubsub topic for actions").Required().String()
+	pubsubSubscription       = command.Flag("google-pubsub-subscription", "Google pubsub subscription").Required().String()
+	labels                   = command.Flag("labels", "Add additional labels to event, key=value").Short('l').StringMap()
 )
 
 func FullCommand() string {
@@ -40,6 +43,7 @@ type Server struct {
 	pubsubClient  *pubsub.Client
 	broker        *Broker
 	quit          chan struct{}
+	gcrSubscriber *pkg.GCRSubscriber
 }
 
 type ExtendedEvent struct {
@@ -59,11 +63,18 @@ func NewServer() (*Server, error) {
 		return nil, err
 	}
 
+	gcrSubscriber, err := pkg.NewGCRSubscriber(ctx, *googleProjectGcrLocation, "gcr", "gcr")
+	if err != nil {
+		log.Errorf("pubsub.NewGCRSubscriber: %v", err)
+		return nil, err
+	}
+
 	return &Server{
 		pubsubContext: ctx,
 		pubsubClient:  c,
 		broker:        NewBroker(),
 		quit:          make(chan struct{}),
+		gcrSubscriber: gcrSubscriber,
 	}, nil
 }
 
@@ -91,6 +102,13 @@ func (s *Server) Run() {
 		log.Infof("Listening for events on %s", *pubsubTopicActions)
 		if err := s.subscriber(); err != nil {
 			log.Errorf("subscriber error: %s", err)
+		}
+		close(s.quit)
+	}()
+	go func() {
+		log.Infof("Listening for events on gcr topic")
+		if err := s.gcrSubscriber.Subscriber(); err != nil {
+			log.Errorf("gcr subscriber error: %s", err)
 		}
 		close(s.quit)
 	}()
@@ -160,13 +178,13 @@ func (s *Server) subscriber() error {
 
 func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 	path := req.URL.Path
-	c, err := websocket.Upgrade(w, req, nil)
+	upgradedWebsocket, err := websocket.Upgrade(w, req, nil)
 	if err != nil {
 		log.WithField("path", path).Errorf("Upgrade: %s", err)
 		return
 	}
-	defer c.Close()
-	rpcClient := rpc.NewClientV11(c)
+	defer upgradedWebsocket.Close()
+	rpcClient := rpc.NewClientV11(upgradedWebsocket)
 	ctx := req.Context()
 
 	messageChan := make(chan []byte)
@@ -175,12 +193,13 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 		s.broker.closingClients <- messageChan
 	}()
 
-	v, err := rpcClient.Version(ctx)
+	version, err := rpcClient.Version(ctx)
 	if err != nil {
 		log.WithField("path", path).Errorf("Version: %s", err)
 		return
 	}
-	log.WithField("path", path).Infof("client version: %s", v)
+	log.WithField("path", path).Infof("client version: %s", version)
+
 	for {
 		select {
 		case m := <-messageChan:
@@ -190,6 +209,14 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 				log.WithField("path", path).Errorf("NotifyChange: %s", err)
 				return
 			}
+		case m := <-s.gcrSubscriber.EventChan:
+			log.WithField("path", path).Infof("got message.image: %v", m.Tag)
+			err := s.gcrSubscriber.SendNotification(m, rpcClient)
+			if err != nil {
+				log.WithField("path", path).Errorf("gcrSubscriber.SendNotification: %s", err)
+				return
+			}
+			log.WithField("path", path).Debugf("image change sent to flux message.image: %v", m.Tag)
 		case <-ctx.Done():
 			s.broker.closingClients <- messageChan
 			return
