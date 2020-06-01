@@ -63,7 +63,7 @@ func NewServer() (*Server, error) {
 		return nil, err
 	}
 
-	gcrSubscriber, err := pkg.NewGCRSubscriber(ctx, *googleProjectGcrLocation, "gcr", "gcr")
+	gcrSubscriber, err := pkg.NewGCRSubscriber(ctx, *googleProjectGcrLocation, "gcr", fmt.Sprintf("gcr-events-%v", googleProject))
 	if err != nil {
 		log.Errorf("pubsub.NewGCRSubscriber: %v", err)
 		return nil, err
