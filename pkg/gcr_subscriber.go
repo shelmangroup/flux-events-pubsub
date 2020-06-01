@@ -99,9 +99,10 @@ func (s *GCRSubscriber) Subscriber() error {
 		if err != nil {
 			return
 		}
-		log.Debugf("Subscriber got message: %#v\n", message)
+		log.Debugf("Subscriber.recived message.tag: %v\n", message.Tag)
 		s.EventChan <- message
 		msg.Ack()
+		log.Debugf("Subscriber.acked message.tag: %v\n", message.Tag)
 	})
 	if err != nil {
 		return fmt.Errorf("Subscriber: %v", err)
@@ -110,6 +111,7 @@ func (s *GCRSubscriber) Subscriber() error {
 }
 
 func (s *GCRSubscriber) SendNotification(msg GCRMessage, fluxRPC *rpc.RPCClientV11) error {
+	log.Debugf("SendNotification got msg: %v", msg)
 	ref, err := image.ParseRef(msg.Tag)
 	if err != nil {
 		log.Errorf("SendNotification failed to parse message tag with err: %s", err)
