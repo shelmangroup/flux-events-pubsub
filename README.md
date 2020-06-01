@@ -8,7 +8,7 @@ and notify the FluxCD daemons upon changes which will trigger a fluxCD Sync.
 FluxCD events (Commit, Sync and Release events) will also be published to pubsub topic
 for later consumtion of different services.
 
-FluxCD events for Google container regetry updates. (no updates are sent to other topics
+FluxCD events for Google container registry updates. (no updates are sent to other topics
 for this changes)
 
 ## Example use cases that consume pubsub events.
