@@ -72,6 +72,8 @@ spec:
         env:
           - name: FLUX_EVENTS_PUBSUB_GOOGLE_PROJECT_GCR
             value: "my gcr project"
+          - name: FLUX_EVENTS_PUBSUB_GOOGLE_PUBSUB_SUBSCRIPTION_GCR
+            value: "gcr-events-<myclustername>"
           - name: GOOGLE_APPLICATION_CREDENTIALS
             value: "/secrets/pubsub-credentials"
           - name: FLUX_EVENTS_PUBSUB_GOOGLE_PROJECT
