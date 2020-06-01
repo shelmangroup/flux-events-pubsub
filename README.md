@@ -8,7 +8,7 @@ and notify the FluxCD daemons upon changes which will trigger a fluxCD Sync.
 FluxCD events (Commit, Sync and Release events) will also be published to pubsub topic
 for later consumtion of different services.
 
-FluxCD events for Google container regetry updates. (no updates are sent to other topics
+FluxCD events for Google container registry updates. (no updates are sent to other topics
 for this changes)
 
 ## Example use cases that consume pubsub events.
@@ -72,6 +72,8 @@ spec:
         env:
           - name: FLUX_EVENTS_PUBSUB_GOOGLE_PROJECT_GCR
             value: "my gcr project"
+          - name: FLUX_EVENTS_PUBSUB_GOOGLE_PUBSUB_SUBSCRIPTION_GCR
+            value: "gcr-events-<myclustername>"
           - name: GOOGLE_APPLICATION_CREDENTIALS
             value: "/secrets/pubsub-credentials"
           - name: FLUX_EVENTS_PUBSUB_GOOGLE_PROJECT
