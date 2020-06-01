@@ -111,7 +111,7 @@ func (s *GCRSubscriber) Subscriber() error {
 }
 
 func (s *GCRSubscriber) SendNotification(msg GCRMessage, fluxRPC *rpc.RPCClientV11) error {
-	log.Debugf("SendNotification got msg: %v", msg)
+	log.Debugf("SendNotification got msg: %#v", msg)
 	ref, err := image.ParseRef(msg.Tag)
 	if err != nil {
 		log.Errorf("SendNotification failed to parse message tag with err: %s", err)
