@@ -210,12 +210,13 @@ func (s *Server) websocketHandler(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 		case m := <-s.gcrSubscriber.EventChan:
-			log.WithField("path", path).Infof("Event: %v", m)
+			log.WithField("path", path).Infof("got message.image: %v", m.Tag)
 			err := s.gcrSubscriber.SendNotification(m, rpcClient)
 			if err != nil {
 				log.WithField("path", path).Errorf("gcrSubscriber.SendNotification: %s", err)
 				return
 			}
+			log.WithField("path", path).Debugf("image change sent to flux message.image: %v", m.Tag)
 		case <-ctx.Done():
 			s.broker.closingClients <- messageChan
 			return
