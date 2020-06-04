@@ -29,6 +29,7 @@ var (
 	googleProject            = command.Flag("google-project", "Google project").Required().String()
 	googleProjectGcrLocation = command.Flag("google-project-gcr", "Google project were gcr is located").Required().String()
 	pubsubSubscriptionGcr    = command.Flag("google-pubsub-subscription-gcr", "Google pubsub subscription for gcr").Default("gcr").String()
+	pubsubTopicGcr           = command.Flag("google-pubsub-topic-gcr", "Google pubsub topic for gcr").Default("gcr").String()
 	pubsubTopicEvents        = command.Flag("google-pubsub-topic", "Google pubsub topic for events").Required().String()
 	pubsubTopicActions       = command.Flag("google-pubsub-topic-actions", "Google pubsub topic for actions").Required().String()
 	pubsubSubscription       = command.Flag("google-pubsub-subscription", "Google pubsub subscription").Required().String()
@@ -64,7 +65,7 @@ func NewServer() (*Server, error) {
 		return nil, err
 	}
 
-	gcrSubscriber, err := pkg.NewGCRSubscriber(ctx, *googleProjectGcrLocation, "gcr", *pubsubSubscriptionGcr)
+	gcrSubscriber, err := pkg.NewGCRSubscriber(ctx, *googleProjectGcrLocation, *pubsubTopicGcr, *pubsubSubscriptionGcr)
 	if err != nil {
 		log.Errorf("pubsub.NewGCRSubscriber: %v", err)
 		return nil, err
