@@ -12,6 +12,6 @@ require (
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/joonix/log v0.0.0-20190524090622-13fe31bbdd7a
-	github.com/sirupsen/logrus v1.4.2
+	github.com/sirupsen/logrus v1.8.3
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 )
